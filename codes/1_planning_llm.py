@@ -3,17 +3,28 @@ import argparse
 import os
 import sys
 from utils import print_response
-from transformers import AutoTokenizer
-from vllm import LLM, SamplingParams
+from llm_client import LLMClient
 
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--paper_name',type=str)
 
-parser.add_argument('--model_name',type=str, default="deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct") 
-parser.add_argument('--tp_size',type=int, default=2)
-parser.add_argument('--temperature',type=float, default=1.0)
-parser.add_argument('--max_model_len',type=int, default=128000)
+parser.add_argument('--model_name', type=str, default="deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
+                    help="模型名称或路径，格式为 'provider:model_name'，例如 'deepseek:deepseek-chat' 或 'ollama:llama3'")
+parser.add_argument('--provider', type=str, default="vllm",
+                    choices=["vllm", "deepseek", "ollama"],
+                    help="LLM 提供商，支持 vllm, deepseek, ollama")
+parser.add_argument('--api_key', type=str, default="",
+                    help="API 密钥（DeepSeek 需要）")
+parser.add_argument('--base_url', type=str, default="",
+                    help="API 基础 URL（DeepSeek 或 Ollama 需要）")
+parser.add_argument('--tp_size', type=int, default=2,
+                    help="张量并行大小（仅 vLLM 需要）")
+parser.add_argument('--temperature', type=float, default=0.7)
+parser.add_argument('--max_tokens', type=int, default=4096,
+                    help="最大生成 token 数")
+parser.add_argument('--max_model_len', type=int, default=128000,
+                    help="最大模型上下文长度（仅 vLLM 需要）")
 
 parser.add_argument('--paper_format',type=str, default="JSON", choices=["JSON", "LaTeX"])
 parser.add_argument('--pdf_json_path', type=str) # json format
@@ -29,10 +40,27 @@ pdf_json_path = args.pdf_json_path
 pdf_latex_path = args.pdf_latex_path
 output_dir = args.output_dir
 
-model_name = args.model_name
+# 解析模型名称和提供者
+if ':' in args.model_name:
+    provider, model_name = args.model_name.split(':', 1)
+else:
+    provider = args.provider
+    model_name = args.model_name
+
 tp_size = args.tp_size
 max_model_len = args.max_model_len
 temperature = args.temperature
+max_tokens = args.max_tokens
+
+# 初始化LLM客户端
+llm_client = LLMClient(
+    model_name=model_name,
+    provider=provider,
+    api_key=args.api_key or os.getenv("DEEPSEEK_API_KEY"),
+    base_url=args.base_url,
+    tp_size=tp_size,
+    max_model_len=max_model_len
+)
 
 if paper_format == "JSON":
     with open(f'{pdf_json_path}') as f:
@@ -226,20 +254,8 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 
 if "Qwen" in model_name:
-    llm = LLM(model=model_name, 
-            tensor_parallel_size=tp_size, 
-            max_model_len=max_model_len,
-            gpu_memory_utilization=0.95,
-            trust_remote_code=True, enforce_eager=True, 
-            rope_scaling={"factor": 4.0, "original_max_position_embeddings": 32768, "type": "yarn"})
     sampling_params = SamplingParams(temperature=temperature, max_tokens=131072)
-
 elif "deepseek" in model_name:
-    llm = LLM(model=model_name, 
-              tensor_parallel_size=tp_size, 
-              max_model_len=max_model_len,
-              gpu_memory_utilization=0.95,
-              trust_remote_code=True, enforce_eager=True)
     sampling_params = SamplingParams(temperature=temperature, max_tokens=128000, stop_token_ids=[tokenizer.eos_token_id])
 
 

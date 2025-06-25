@@ -5,7 +5,7 @@ import sys
 import copy
 from utils import extract_planning, content_to_json, extract_code_from_content,extract_code_from_content2, print_response, print_log_cost, load_accumulated_cost, save_accumulated_cost
 from transformers import AutoTokenizer
-from vllm import LLM, SamplingParams
+from llm_client import LLMClient
 
 import argparse
 
@@ -13,10 +13,22 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('--paper_name',type=str)
 
-parser.add_argument('--model_name',type=str, default="deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct") 
-parser.add_argument('--tp_size',type=int, default=2)
-parser.add_argument('--temperature',type=float, default=1.0)
-parser.add_argument('--max_model_len',type=int, default=128000)
+parser.add_argument('--model_name', type=str, default="deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
+                    help="Model name or path, format as 'provider:model_name', e.g. 'deepseek:deepseek-chat' or 'ollama:llama3'")
+parser.add_argument('--provider', type=str, default="vllm",
+                    choices=["vllm", "deepseek", "ollama"],
+                    help="LLM provider, supports vllm, deepseek, ollama")
+parser.add_argument('--api_key', type=str, default="",
+                    help="API key (required for DeepSeek)")
+parser.add_argument('--base_url', type=str, default="",
+                    help="API base URL (for DeepSeek or Ollama)")
+parser.add_argument('--tp_size', type=int, default=2,
+                    help="Tensor parallelism size (vLLM only)")
+parser.add_argument('--temperature', type=float, default=0.7)
+parser.add_argument('--max_tokens', type=int, default=4096,
+                    help="Maximum number of tokens to generate")
+parser.add_argument('--max_model_len', type=int, default=128000,
+                    help="Maximum model context length (vLLM only)")
 
 parser.add_argument('--paper_format',type=str, default="JSON", choices=["JSON", "LaTeX"])
 parser.add_argument('--pdf_json_path', type=str) # json format
@@ -29,10 +41,27 @@ args    = parser.parse_args()
 
 paper_name = args.paper_name
 
-model_name = args.model_name
+# Parse model name and provider
+if ':' in args.model_name:
+    provider, model_name = args.model_name.split(':', 1)
+else:
+    provider = args.provider
+    model_name = args.model_name
+
 tp_size = args.tp_size
 max_model_len = args.max_model_len
 temperature = args.temperature
+max_tokens = args.max_tokens
+
+# Initialize LLM client
+llm_client = LLMClient(
+    model_name=model_name,
+    provider=provider,
+    api_key=args.api_key or os.getenv("DEEPSEEK_API_KEY"),
+    base_url=args.base_url,
+    tp_size=tp_size,
+    max_model_len=max_model_len
+)
 
 paper_format = args.paper_format
 pdf_json_path = args.pdf_json_path
@@ -154,37 +183,15 @@ Next, you must write only the "{todo_file_name}".
 ## Code: {todo_file_name}"""}]
     return write_msg
 
-model_name = args.model_name
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-
-if "Qwen" in model_name:
-    llm = LLM(model=model_name, 
-            tensor_parallel_size=tp_size, 
-            max_model_len=max_model_len,
-            gpu_memory_utilization=0.95,
-            trust_remote_code=True, enforce_eager=True, 
-            rope_scaling={"factor": 4.0, "original_max_position_embeddings": 32768, "type": "yarn"})
-    sampling_params = SamplingParams(temperature=temperature, max_tokens=131072)
-
-elif "deepseek" in model_name:
-    llm = LLM(model=model_name, 
-              tensor_parallel_size=tp_size, 
-              max_model_len=max_model_len,
-              gpu_memory_utilization=0.95,
-              trust_remote_code=True, enforce_eager=True)
-    sampling_params = SamplingParams(temperature=temperature, max_tokens=128000, stop_token_ids=[tokenizer.eos_token_id])
+tokenizer = AutoTokenizer.from_pretrained(model_name if provider == "vllm" else "gpt2")
 
 
 def run_llm(msg):
-    # vllm
-    prompt_token_ids = [tokenizer.apply_chat_template(messages, add_generation_prompt=True) for messages in [msg]]
-
-    outputs = llm.generate(prompt_token_ids=prompt_token_ids, sampling_params=sampling_params)
-
-    completion = [output.outputs[0].text for output in outputs]
-    
-    return completion[0] 
+    return llm_client.generate(
+        messages=msg,
+        temperature=temperature,
+        max_tokens=max_tokens
+    ) 
     
 
 # testing for checking
