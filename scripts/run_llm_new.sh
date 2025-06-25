@@ -1,4 +1,4 @@
-MODEL_NAME="deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct"
+MODEL_NAME="devstral:latest"
 TP_SIZE=2
 
 PAPER_NAME="Transformer"
@@ -24,7 +24,7 @@ echo "------- PaperCoder -------"
 
 python ../codes/1_planning_llm.py \
     --provider ollama \
-    --model_name llama3 \
+    --model_name devstral \
     --base_url http://192.168.31.8:11434 \
     --paper_name $PAPER_NAME \
     --tp_size ${TP_SIZE} \
@@ -39,14 +39,18 @@ cp -rp ${OUTPUT_DIR}/planning_config.yaml ${OUTPUT_REPO_DIR}/config.yaml
 
 python ../codes/2_analyzing_llm.py \
     --paper_name $PAPER_NAME \
-    --model_name ${MODEL_NAME} \
+    --provider ollama \
+    --model_name devstral \
+    --base_url http://192.168.31.8:11434 \
     --tp_size ${TP_SIZE} \
     --pdf_json_path ${PDF_JSON_CLEANED_PATH} \
     --output_dir ${OUTPUT_DIR}
 
 python ../codes/3_coding_llm.py  \
     --paper_name $PAPER_NAME \
-    --model_name ${MODEL_NAME} \
+    --provider ollama \
+    --model_name devstral \
+    --base_url http://192.168.31.8:11434 \
     --tp_size ${TP_SIZE} \
     --pdf_json_path ${PDF_JSON_CLEANED_PATH} \
     --output_dir ${OUTPUT_DIR} \

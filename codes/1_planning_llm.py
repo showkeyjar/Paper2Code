@@ -2,8 +2,9 @@ import json
 import argparse
 import os
 import sys
-from utils import print_response
+from transformers import AutoTokenizer
 from llm_client import LLMClient
+from utils import print_response
 
 parser = argparse.ArgumentParser()
 
@@ -249,25 +250,26 @@ training:
     }]
 
 
-model_name = args.model_name
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-
-if "Qwen" in model_name:
-    sampling_params = SamplingParams(temperature=temperature, max_tokens=131072)
-elif "deepseek" in model_name:
-    sampling_params = SamplingParams(temperature=temperature, max_tokens=128000, stop_token_ids=[tokenizer.eos_token_id])
+# Initialize tokenizer with offline support
+tokenizer = None
+try:
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained(
+        "gpt2",  # Use a small default model
+        local_files_only=True,
+        trust_remote_code=True
+    )
+except Exception as e:
+    print(f"Warning: Could not load tokenizer: {e}")
+    print("Will continue without tokenizer. Some features may be limited.")
 
 
 def run_llm(msg):
-    # vllm
-    prompt_token_ids = [tokenizer.apply_chat_template(messages, add_generation_prompt=True) for messages in [msg]]
-
-    outputs = llm.generate(prompt_token_ids=prompt_token_ids, sampling_params=sampling_params)
-
-    completion = [output.outputs[0].text for output in outputs]
-    
-    return completion[0] 
+    return llm_client.generate(
+        messages=msg,
+        temperature=temperature,
+        max_tokens=max_tokens
+    ) 
 
 responses = []
 trajectories = []

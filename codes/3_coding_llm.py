@@ -183,8 +183,20 @@ Next, you must write only the "{todo_file_name}".
 ## Code: {todo_file_name}"""}]
     return write_msg
 
-tokenizer = AutoTokenizer.from_pretrained(model_name if provider == "vllm" else "gpt2")
+rmodel_name = args.model_name
 
+# Initialize tokenizer with offline support
+tokenizer = None
+try:
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained(
+        "gpt2",  # Use a small default model
+        local_files_only=True,
+        trust_remote_code=True
+    )
+except Exception as e:
+    print(f"Warning: Could not load tokenizer: {e}")
+    print("Will continue without tokenizer. Some features may be limited.")
 
 def run_llm(msg):
     return llm_client.generate(
@@ -192,6 +204,7 @@ def run_llm(msg):
         temperature=temperature,
         max_tokens=max_tokens
     ) 
+    
     
 
 # testing for checking

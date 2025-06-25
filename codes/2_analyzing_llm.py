@@ -176,8 +176,26 @@ You DON'T need to provide the actual code yet; focus on a thorough, clear analys
 
 
 model_name = args.model_name
-tokenizer = AutoTokenizer.from_pretrained(model_name if provider == "vllm" else "gpt2")
 
+# Initialize tokenizer with offline support
+tokenizer = None
+try:
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained(
+        "gpt2",  # Use a small default model
+        local_files_only=True,
+        trust_remote_code=True
+    )
+except Exception as e:
+    print(f"Warning: Could not load tokenizer: {e}")
+    print("Will continue without tokenizer. Some features may be limited.")
+
+def run_llm(msg):
+    return llm_client.generate(
+        messages=msg,
+        temperature=temperature,
+        max_tokens=max_tokens
+    )
 
 if "Qwen" in model_name:
     llm = LLM(model=model_name, 
@@ -194,15 +212,6 @@ elif "deepseek" in model_name:
               max_model_len=max_model_len,
               gpu_memory_utilization=0.95,
               trust_remote_code=True, enforce_eager=True)
-    sampling_params = SamplingParams(temperature=temperature, max_tokens=128000, stop_token_ids=[tokenizer.eos_token_id])
-
-def run_llm(msg):
-    return llm_client.generate(
-        messages=msg,
-        temperature=temperature,
-        max_tokens=max_tokens
-    )
-
 artifact_output_dir=f'{output_dir}/analyzing_artifacts'
 os.makedirs(artifact_output_dir, exist_ok=True)
 
