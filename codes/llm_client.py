@@ -1,8 +1,8 @@
 import os
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, List, Optional, Union
 import json
 import requests
-from openai import OpenAI
+from openai import OpenAI as OpenAIClient
 from transformers import AutoTokenizer
 
 try:
@@ -22,7 +22,11 @@ except ImportError:
 class LLMClient:
     """统一管理不同LLM提供商的客户端"""
     
-    def __init__(self, model_name: str, provider: str = "vllm", **kwargs):
+    def __init__(self, model_name: str, 
+            provider: str = "vllm", 
+            tp_size: int = 1,
+            max_model_len: int = 4096,
+            local_vllm: bool = False, **kwargs):
         """
         初始化LLM客户端
         
@@ -33,6 +37,9 @@ class LLMClient:
         """
         self.model_name = model_name
         self.provider = provider.lower()
+        self.tp_size = tp_size
+        self.max_model_len = max_model_len
+        self.local_vllm = local_vllm
         # Initialize tokenizer
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(
@@ -47,16 +54,25 @@ class LLMClient:
             self.tokenizer = None
         
         if self.provider == "vllm":
-            if not VLLM_AVAILABLE:
-                raise ImportError(
-                    "vllm is not installed. Please install it with 'pip install vllm' or use a different provider.\n"
-                    "You can install it with: pip install vllm"
+            if self.local_vllm:
+                # 本地vllm
+                if not VLLM_AVAILABLE:
+                    raise ImportError(
+                        "vllm is not installed. Please install it with 'pip install vllm' or use a different provider.\n"
+                        "You can install it with: pip install vllm"
+                    )
+                self.client = VLLM(
+                    model=model_name,
+                    tensor_parallel_size=self.tp_size,
+                    max_model_len=self.max_model_len,
+                    **kwargs
                 )
-            self.client = VLLM(
-                model=model_name,
-                tensor_parallel_size=kwargs.get("tp_size", 1),
-                max_model_len=kwargs.get("max_model_len", 4096)
-            )
+            else:
+                # 远程vllm（Docker）
+                self.client = OpenAIClient(
+                    base_url=kwargs.get("base_url", "http://localhost:8000/v1"),
+                    api_key=kwargs.get("api_key", "EMPTY")
+                )
         elif self.provider == "deepseek":
             self.client = OpenAI(
                 api_key=kwargs.get("api_key", os.getenv("DEEPSEEK_API_KEY")),
@@ -93,30 +109,32 @@ class LLMClient:
         elif self.provider == "ollama":
             return self._generate_ollama(messages, temperature, max_tokens, **kwargs)
     
-    def _generate_vllm(
-        self,
-        messages: List[Dict[str, str]],
-        temperature: float,
-        max_tokens: int,
-        **kwargs
-    ) -> str:
-        """使用vLLM生成文本"""
-        sampling_params = SamplingParams(
-            temperature=temperature,
+    def _generate_vllm(self, messages, temperature=0.7, max_tokens=2048, **kwargs):
+        if self.local_vllm:
+            # 本地vllm
+            prompt = self.tokenizer.apply_chat_template(messages, tokenize=False)
+            sampling_params = SamplingParams(
+                temperature=temperature,
             max_tokens=max_tokens,
             **kwargs
-        )
-        
-        # 将消息转换为提示
-        prompt = self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True
-        )
-        
-        outputs = self.client.generate([prompt], sampling_params)
-        return outputs[0].outputs[0].text
-    
+            )
+            outputs = self.client.generate([prompt], sampling_params)
+            return outputs[0].outputs[0].text
+        else:
+            # 远程vllm（Docker）
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    **kwargs
+                )
+                return response.choices[0].message.content
+            except Exception as e:
+                error_msg = f"Error calling vLLM API: {str(e)}"
+                raise Exception(error_msg) from e
+
     def _generate_deepseek(
         self,
         messages: List[Dict[str, str]],

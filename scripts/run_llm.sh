@@ -1,4 +1,4 @@
-MODEL_NAME="deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct"
+MODEL_NAME="deepseek-ai/DeepSeek-R1-Distill-Llama-70B"
 TP_SIZE=2
 
 PAPER_NAME="Transformer"
@@ -25,6 +25,10 @@ echo "------- PaperCoder -------"
 python ../codes/1_planning_llm.py \
     --paper_name $PAPER_NAME \
     --model_name ${MODEL_NAME} \
+    --provider vllm \
+    --local_vllm false \
+    --base_url "http://localhost:18005/v1" \
+    --api_key "token-abc123" \
     --tp_size ${TP_SIZE} \
     --pdf_json_path ${PDF_JSON_CLEANED_PATH} \
     --output_dir ${OUTPUT_DIR}
@@ -38,6 +42,10 @@ cp -rp ${OUTPUT_DIR}/planning_config.yaml ${OUTPUT_REPO_DIR}/config.yaml
 python ../codes/2_analyzing_llm.py \
     --paper_name $PAPER_NAME \
     --model_name ${MODEL_NAME} \
+    --provider vllm \
+    --local_vllm false \
+    --base_url "http://localhost:18005/v1" \
+    --api_key "token-abc123" \
     --tp_size ${TP_SIZE} \
     --pdf_json_path ${PDF_JSON_CLEANED_PATH} \
     --output_dir ${OUTPUT_DIR}
@@ -45,6 +53,10 @@ python ../codes/2_analyzing_llm.py \
 python ../codes/3_coding_llm.py  \
     --paper_name $PAPER_NAME \
     --model_name ${MODEL_NAME} \
+    --provider vllm \
+    --local_vllm false \
+    --base_url "http://localhost:18005/v1" \
+    --api_key "token-abc123" \
     --tp_size ${TP_SIZE} \
     --pdf_json_path ${PDF_JSON_CLEANED_PATH} \
     --output_dir ${OUTPUT_DIR} \

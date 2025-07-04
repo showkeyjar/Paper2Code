@@ -18,6 +18,8 @@ parser.add_argument('--model_name', type=str, default="deepseek-ai/DeepSeek-Code
 parser.add_argument('--provider', type=str, default="vllm",
                     choices=["vllm", "deepseek", "ollama"],
                     help="LLM provider, supports vllm, deepseek, ollama")
+parser.add_argument('--local_vllm',type=bool, default=False,
+                    help="是否使用本地 vLLM")
 parser.add_argument('--api_key', type=str, default="",
                     help="API key (required for DeepSeek)")
 parser.add_argument('--base_url', type=str, default="",
@@ -52,6 +54,7 @@ tp_size = args.tp_size
 max_model_len = args.max_model_len
 temperature = args.temperature
 max_tokens = args.max_tokens
+local_vllm = args.local_vllm
 
 # Initialize LLM client
 llm_client = LLMClient(
@@ -60,7 +63,8 @@ llm_client = LLMClient(
     api_key=args.api_key or os.getenv("DEEPSEEK_API_KEY"),
     base_url=args.base_url,
     tp_size=tp_size,
-    max_model_len=max_model_len
+    max_model_len=max_model_len,
+    local_vllm=local_vllm
 )
 
 paper_format = args.paper_format

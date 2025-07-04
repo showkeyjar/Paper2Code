@@ -167,3 +167,4 @@ model/*.onnx
 *.pdf
 
 run_deepseek_test.sh
+run_llm_test.sh
