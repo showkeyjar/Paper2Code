@@ -166,3 +166,4 @@ model/*.onnx
 
 *.pdf
 
+run_deepseek_test.sh

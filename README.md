@@ -2,6 +2,13 @@
 
 ![PaperCoder Overview](./assets/papercoder_overview.png)
 
+
+### 修改说明
+
+在原有代码的基础上增加了对ollama与deepseek api的支持
+
+详见 scripts/run_ollama.sh, run_deepseek.sh
+
 📄 [Read the paper on arXiv](https://arxiv.org/abs/2504.17192)
 
 **PaperCoder** is a multi-agent LLM system that transforms paper into a code repository.
